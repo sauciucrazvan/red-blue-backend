@@ -1,12 +1,14 @@
+import { lazy } from "react";
+import { Route, Routes } from "react-router-dom";
+
+const Dashboard = lazy(() => import("./pages/Dashboard.tsx")),
+  NotFound = lazy(() => import("./pages/NotFound.tsx"));
+
 export default function App() {
   return (
-    <>
-      <div className="flex flex-row">
-        <h1 className="text-red-500">RED</h1>
-        <h1 className="text-purple-500">_</h1>
-        <h1 className="text-blue-500">BLUE</h1>
-      </div>
-      <div>Hello world!</div>
-    </>
+    <Routes>
+      <Route path="/" element={<Dashboard />} />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
   );
 }
