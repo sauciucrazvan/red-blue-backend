@@ -1,7 +1,11 @@
-from models.game_model import Game
+from api import app as api
 from database import session as db
 
 if __name__ == "__main__":
-    db.initConnection()
+    # initialization of the sqlite database
+    db.initConnection() 
 
-    # code
+    # starts the uvicorn server (for FastAPI)
+    api.runApp()
+    
+#EOF
