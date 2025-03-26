@@ -1,6 +1,6 @@
 # RED-BLUE Game
 
-To play this game, two users will perform the following steps inside the app:
+To play this game, two users will perform the following steps inside the application:
 
 1. First user creates a new game session and gets a unique generated code
 2. Second user joins the game with the code generated at step 1
