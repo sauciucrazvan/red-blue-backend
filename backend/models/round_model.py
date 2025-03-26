@@ -18,4 +18,3 @@ class Round(Base):
     player1_score = Column(Integer, nullable=True)
     player2_score = Column(Integer, nullable=True)
     
-    
