@@ -1,2 +1,9 @@
+<<<<<<< HEAD
 *.pyc
 __pycache__
+=======
+
+#python stuff
+__pycache__
+*.pyc
+>>>>>>> 5af0098f419a6c8ec3b2e765a9299938fa69086e
