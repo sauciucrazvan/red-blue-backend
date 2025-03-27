@@ -87,6 +87,8 @@ async def join_game(request: JoinGame):
 
     session = db.getSession()
     game = session.query(Game).filter(Game.code == request.code).first()
+    if not game:
+        raise HTTPException(status_code = 404, detail = "Game not found")
 
     if game.game_state != "waiting":
         raise HTTPException(status_code=403, detail="Game is already active!")
@@ -104,4 +106,50 @@ async def join_game(request: JoinGame):
         "game_id": game.id,
         "player2_name": game.player2_name,
         "game_state": game.game_state,
+    }
+
+# class ChooseColor(BaseModel):
+#     game_id: str
+#     round_number: int
+#     player_name: str
+#     choice: str
+
+# @app.post("/game/{game_id}/round/{round_number}/choice")
+# async def choose_color(request: ChooseColor):
+#     session = db.getSession()
+#     game = session.query(Game).filter(Game.id == request.game_id).first()
+#     if not game:
+#         raise HTTPException(status_code = 404, detail = "Game not found")
+#     if request.choice!="RED" or request.choice!="BLUE":
+#         raise HTTPException(status_code = 400, detail = "Invalid choice")
+    
+#     if request.player_name == game.player1_name:
+        
+#     elif request.player_name == game.player2_name:
+
+class RejoinGame(BaseModel):
+    player_name: str
+    code: str
+@app.post("/game/rejoin")
+async def rejoin_game(request: RejoinGame):
+    if len(request.player_name) < 3 or len(request.player_name) > 16:
+        raise HTTPException(status_code=400, detail="Player name should be between 3 and 16 characters long.")
+        
+    pattern = r"^[a-zA-Z0-9_.]+$"
+    if not re.match(pattern, request.player_name):
+        raise HTTPException(status_code=400, detail="Player name should contain only letters, number and special characters ('.' and '_')")
+
+    session = db.getSession()
+    game = session.query(Game).filter(Game.code == request.code).first()
+    
+    if game.game_state != "waiting":
+        raise HTTPException(status_code = 403, detail = "Both players are active")
+    game.player2_name = request.player_name
+    game.game_state = "active"
+
+    session.commit() # Commits the changes to the database
+    session.refresh(game) # Updates the game
+    return{
+        "response" : "Reconnected",
+        "game_state" : game.game_state
     }
