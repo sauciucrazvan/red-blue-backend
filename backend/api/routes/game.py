@@ -1,3 +1,4 @@
+import datetime
 import re
 
 from pydantic import BaseModel
@@ -153,3 +154,60 @@ async def rejoin_game(request: RejoinGame):
         "response" : "Reconnected",
         "game_state" : game.game_state
     }
+
+class AbandonGame(BaseModel):
+    game_id: str
+    player_name :str
+@app.post("/game/{game_id}/abandon")
+async def abandon_game(request: AbandonGame):
+
+    session = db.getSession()
+    game = session.query(Game).filter(Game.game_id == request.game_id).first()
+
+    if not game:
+        raise HTTPException(status_code = 404, detail = "Game not found")
+    if game.game_state != "active":
+        raise HTTPException(status_code = 403, detail = "The game is not active")
+    if request.player_name == game.player1_name:
+        game.player1_score = -100
+        game.player2_score = 100
+    else:
+        game.player1_score = 100
+        game.player2_score = -100
+    
+    game.game_state = "finished"
+
+    session.commit() # Commits the changes to the database
+    session.refresh(game) # Updates the game
+
+    return{
+        "response": f"{game['player1_name'] if request['player_name'] == game['player1_name'] else game['player2_name']} abandoned the game!",
+        "game_state" : game.game_state,
+        "scores" : {
+            game.player1_name:game.player1_score,
+            game.player2_name:game.player2_score
+        }
+    }
+
+class DisconnectGame(BaseModel):
+    game_id : str
+@app.post("/game/disconnect")
+async def disconnect_game(request: DisconnectGame):
+    session = db.getSession()
+    game = session.query(Game).filter(Game.id == request.game_id).first()
+
+    if not game:
+        raise HTTPException(status_code = 404, detail = "Game not found")
+    if game.game_state != "active":
+        raise HTTPException(status_code = 403, detail = "The game is not active")
+
+    game.game_state = "waiting"
+    game.disconnected_at = datetime.datetime.now(datetime.timezone.utc)
+
+    session.commit() # Commits the changes to the database
+    session.refresh(game) # Updates the game
+
+    return{
+        "message":"Player disconnected"
+    }
+    
