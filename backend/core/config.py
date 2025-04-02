@@ -2,4 +2,4 @@ debug = True
 
 # Uvicorn server
 uvicorn_host = "localhost"
-uvicorn_port = 8001
+uvicorn_port = 8000
