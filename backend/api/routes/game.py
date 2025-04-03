@@ -18,24 +18,9 @@ app = getApp()
 #
 
 @app.get("/games")
-async def list_games(page: int = 1, page_size: int = 10, code: str = None, game_state: str = None):
-    session = db.getSession()
-    
-    # Filters
-    query = session.query(Game)
-    if game_state is not None:
-        query = query.filter(Game.game_state == game_state)
-    if code is not None:
-        query = query.filter(Game.code == code)
-    
-    # Pagination stuff
-    total_games = query.count()
-    games = query.offset((page - 1) * page_size).limit(page_size).all()
-    
-    return {
-        "total_games": total_games,
-        "games": games,
-    }
+async def list_games(page: int = 1, page_size: int = 10):
+    games = db.getSession().query(Game).offset((page - 1) * page_size).limit(page_size).all()
+    return games
 
 #
 #   Creates a game and returns the created game ID and the join code
@@ -143,14 +128,9 @@ async def join_game(request: JoinGame):
         
 #     elif request.player_name == game.player2_name:
 
-#
-#   The method used for player reconnections
-#   Should not reset the player's score, nor the current round of the game
-#
 class RejoinGame(BaseModel):
     player_name: str
     code: str
-
 @app.post("/game/rejoin")
 async def rejoin_game(request: RejoinGame):
     if len(request.player_name) < 3 or len(request.player_name) > 16:
@@ -162,16 +142,34 @@ async def rejoin_game(request: RejoinGame):
 
     session = db.getSession()
     game = session.query(Game).filter(Game.code == request.code).first()
-    
-    if game.game_state != "waiting":
+    if game.game_state == "active":
         raise HTTPException(status_code = 403, detail = "Both players are active")
-    
-    game.player2_name = request.player_name
-    game.game_state = "active"
 
+    if game.player1_name and not game.player2_name:
+        game.player2_name = request.player_name
+    elif not game.player1_name and game.player2_name:
+        game.player1_name = request.player_name
+
+    game.game_state = "active"
+    # if not game.player2_name:
+    #     game.player2_name = request.player_name
+    #     game.game_state = "active"
+    # else:
+    #     if not game.player1_name:
+    #         game.player1_name = request.player_name
+    #         game.game_state = "active"
+    #     #raise HTTPException(status_code=400, detail="Player 2 is already set.")
+    #     elif game.player2_name and game.player1_name:
+    #         raise HTTPException(status_code=403, detail="Both players are active")
+    #     #elif game.game_state == "active":
+            #raise HTTPException(status_code = 403, detail = "Both players are active")
+        
+
+    #if game.game_state == "active":
+        #raise HTTPException(status_code = 403, detail = "Both players are active")
+    
     session.commit() # Commits the changes to the database
     session.refresh(game) # Updates the game
-
     return{
         "response" : "Reconnected",
         "game_state" : game.game_state
@@ -179,19 +177,17 @@ async def rejoin_game(request: RejoinGame):
 
 class AbandonGame(BaseModel):
     game_id: str
-    player_name: str
-
+    player_name :str
 @app.post("/game/{game_id}/abandon")
 async def abandon_game(request: AbandonGame):
+
     session = db.getSession()
     game = session.query(Game).filter(Game.game_id == request.game_id).first()
 
     if not game:
         raise HTTPException(status_code = 404, detail = "Game not found")
-    
     if game.game_state != "active":
         raise HTTPException(status_code = 403, detail = "The game is not active")
-    
     if request.player_name == game.player1_name:
         game.player1_score = -100
         game.player2_score = 100
@@ -214,8 +210,8 @@ async def abandon_game(request: AbandonGame):
     }
 
 class DisconnectGame(BaseModel):
-    game_id: str
-
+    game_id : str
+    player_name: str
 @app.post("/game/disconnect")
 async def disconnect_game(request: DisconnectGame):
     session = db.getSession()
@@ -224,15 +220,22 @@ async def disconnect_game(request: DisconnectGame):
     if not game:
         raise HTTPException(status_code = 404, detail = "Game not found")
     if game.game_state != "active":
-        raise HTTPException(status_code = 403, detail = "The game is not active")
-
+        raise HTTPException(status_code = 403, detail = "The game is not active!")
+    
+    if request.player_name == game.player1_name:
+        game.player1_name = None
+    elif request.player_name == game.player2_name:
+        game.player2_name = None
+    else:
+        raise HTTPException(status_code = 400, detail = "No player connected with that username")
+    
     game.game_state = "waiting"
     game.disconnected_at = datetime.datetime.now(datetime.timezone.utc)
 
     session.commit() # Commits the changes to the database
     session.refresh(game) # Updates the game
 
-    return {
-        "message": "A player has disconnected!"
+    return{
+        "message":"Player disconnected"
     }
     
