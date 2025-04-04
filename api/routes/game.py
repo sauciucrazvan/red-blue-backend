@@ -17,7 +17,7 @@ app = getApp()
 #   or returns an array with all the games filtered by the arguments
 #
 
-@app.get("/games")
+@app.get("/api/v1/games")
 async def list_games(page: int = 1, page_size: int = 10):
     games = db.getSession().query(Game).offset((page - 1) * page_size).limit(page_size).all()
     return games
@@ -29,7 +29,7 @@ async def list_games(page: int = 1, page_size: int = 10):
 class CreateGame(BaseModel):
     player1_name: str
     
-@app.post("/game/create")
+@app.post("/api/v1/game/create")
 async def create_game(request: CreateGame):
     if len(request.player1_name) < 3 or len(request.player1_name) > 16:
         raise HTTPException(status_code=400, detail="Player name should be between 3 and 16 characters long.")
@@ -59,7 +59,7 @@ async def create_game(request: CreateGame):
 #   Gets data for a specific game by their ID
 #
 
-@app.get("/game/{game_id}")
+@app.get("/api/v1/game/{game_id}")
 async def get_game(game_id: str):
     game = db.getSession().query(Game).filter(Game.id == game_id).first()
     
@@ -77,7 +77,7 @@ class JoinGame(BaseModel):
     code: str
     player_name: str
 
-@app.post("/game/join")
+@app.post("/api/v1/game/join")
 async def join_game(request: JoinGame):
     if len(request.player_name) < 3 or len(request.player_name) > 16:
         raise HTTPException(status_code=400, detail="Player name should be between 3 and 16 characters long.")
@@ -147,7 +147,7 @@ class AbandonGame(BaseModel):
     game_id: str
     player_name: str
 
-@app.post("/game/{game_id}/abandon")
+@app.post("/api/v1/game/{game_id}/abandon")
 async def abandon_game(request: AbandonGame):
 
     session = db.getSession()
@@ -186,7 +186,7 @@ class DisconnectGame(BaseModel):
     game_id: str
     player_name: str
 
-@app.post("/game/disconnect")
+@app.post("/api/v1/game/disconnect")
 async def disconnect_game(request: DisconnectGame):
     session = db.getSession()
     game = session.query(Game).filter(Game.id == request.game_id).first()
