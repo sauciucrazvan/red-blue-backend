@@ -177,7 +177,8 @@ async def rejoin_game(request: RejoinGame):
 
 class AbandonGame(BaseModel):
     game_id: str
-    player_name :str
+    player_name: str
+
 @app.post("/game/{game_id}/abandon")
 async def abandon_game(request: AbandonGame):
 
@@ -212,6 +213,7 @@ async def abandon_game(request: AbandonGame):
 class DisconnectGame(BaseModel):
     game_id : str
     player_name: str
+
 @app.post("/game/disconnect")
 async def disconnect_game(request: DisconnectGame):
     session = db.getSession()
@@ -219,23 +221,30 @@ async def disconnect_game(request: DisconnectGame):
 
     if not game:
         raise HTTPException(status_code = 404, detail = "Game not found")
-    if game.game_state != "active":
-        raise HTTPException(status_code = 403, detail = "The game is not active!")
+    
+    if game.game_state == "finished":
+        raise HTTPException(status_code = 403, detail = "The game is already finished!")
     
     if request.player_name == game.player1_name:
-        game.player1_name = None
+        game.player1_name = ""
     elif request.player_name == game.player2_name:
-        game.player2_name = None
+        game.player2_name = ""
     else:
         raise HTTPException(status_code = 400, detail = "No player connected with that username")
     
-    game.game_state = "waiting"
-    game.disconnected_at = datetime.datetime.now(datetime.timezone.utc)
+    if not game.player1_name and not game.player2_name: #both disconnected
+        game.game_state = "finished"
+        game.player1_score = -100
+        game.player2_score = -100
+    else:
+        game.game_state = "waiting"
+        game.disconnected_at = datetime.datetime.now(datetime.timezone.utc)
 
     session.commit() # Commits the changes to the database
     session.refresh(game) # Updates the game
 
-    return{
-        "message":"Player disconnected"
+    return {
+        "message": f"{request.player_name} disconnected from the game!",
+        "game_state": game.game_state,
     }
     

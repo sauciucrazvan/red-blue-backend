@@ -12,9 +12,9 @@ class Game(Base):
     id = Column(String, primary_key=True, nullable=False, default = lambda: str(uuid.uuid4()))
     code = Column(String, nullable=False)
 
-    player1_name = Column(String, nullable=False)
+    player1_name = Column(String, nullable=True)
     player2_name = Column(String, nullable=True)
-    player1_score = Column(Integer, nullable=False)
+    player1_score = Column(Integer, nullable=True)
     player2_score = Column(Integer, nullable=True)
     
     current_round = Column(Integer, nullable=False)
