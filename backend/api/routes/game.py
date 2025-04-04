@@ -70,7 +70,7 @@ async def get_game(game_id: str):
 
 #
 #   The method that allows the second player to join a lobby
-#   Requires the join code and a player name
+#   Requires the join code and a player name. Players will rejoin using this method.
 #
 
 class JoinGame(BaseModel):
@@ -89,16 +89,25 @@ async def join_game(request: JoinGame):
     session = db.getSession()
     game = session.query(Game).filter(Game.code == request.code).first()
     if not game:
-        raise HTTPException(status_code = 404, detail = "Game not found")
+        raise HTTPException(status_code = 404, detail = "Game not found!")
 
-    if game.game_state != "waiting":
-        raise HTTPException(status_code=403, detail="Game is already active!")
+    if game.player1_name == request.player_name or game.player2_name == request.player_name:
+            raise HTTPException(status_code=403, detail="There are no free slots available.")
 
-    # Updates the game with these values
-    game.player2_name = request.player_name
-    game.player2_score = 0
+    if game.game_state == "active" and game.player1_name and game.player2_name:
+        raise HTTPException(status_code=403, detail="Both players are active.")
+    
+    if not game.player1_name:
+        game.player1_name = request.player_name
+        game.player1_score = 0
+    elif not game.player2_name:
+        game.player2_name = request.player_name
+        game.player2_score = 0
+    else:
+        raise HTTPException(status_code=400, detail="No available slot for the player.")
+
     game.game_state = "active"
-    game.current_round = 1
+    game.current_round = 1 if not game.current_round else game.current_round
 
     session.commit() # Commits the changes to the database
     session.refresh(game) # Updates the game
@@ -128,52 +137,11 @@ async def join_game(request: JoinGame):
         
 #     elif request.player_name == game.player2_name:
 
-class RejoinGame(BaseModel):
-    player_name: str
-    code: str
-@app.post("/game/rejoin")
-async def rejoin_game(request: RejoinGame):
-    if len(request.player_name) < 3 or len(request.player_name) > 16:
-        raise HTTPException(status_code=400, detail="Player name should be between 3 and 16 characters long.")
-        
-    pattern = r"^[a-zA-Z0-9_.]+$"
-    if not re.match(pattern, request.player_name):
-        raise HTTPException(status_code=400, detail="Player name should contain only letters, number and special characters ('.' and '_')")
 
-    session = db.getSession()
-    game = session.query(Game).filter(Game.code == request.code).first()
-    if game.game_state == "active":
-        raise HTTPException(status_code = 403, detail = "Both players are active")
-
-    if game.player1_name and not game.player2_name:
-        game.player2_name = request.player_name
-    elif not game.player1_name and game.player2_name:
-        game.player1_name = request.player_name
-
-    game.game_state = "active"
-    # if not game.player2_name:
-    #     game.player2_name = request.player_name
-    #     game.game_state = "active"
-    # else:
-    #     if not game.player1_name:
-    #         game.player1_name = request.player_name
-    #         game.game_state = "active"
-    #     #raise HTTPException(status_code=400, detail="Player 2 is already set.")
-    #     elif game.player2_name and game.player1_name:
-    #         raise HTTPException(status_code=403, detail="Both players are active")
-    #     #elif game.game_state == "active":
-            #raise HTTPException(status_code = 403, detail = "Both players are active")
-        
-
-    #if game.game_state == "active":
-        #raise HTTPException(status_code = 403, detail = "Both players are active")
-    
-    session.commit() # Commits the changes to the database
-    session.refresh(game) # Updates the game
-    return{
-        "response" : "Reconnected",
-        "game_state" : game.game_state
-    }
+#
+#   In case one player abandons the game, their score will be set to -100
+#   while the opponents will be set to 100, and the game is set to finished.
+#
 
 class AbandonGame(BaseModel):
     game_id: str
@@ -186,9 +154,9 @@ async def abandon_game(request: AbandonGame):
     game = session.query(Game).filter(Game.game_id == request.game_id).first()
 
     if not game:
-        raise HTTPException(status_code = 404, detail = "Game not found")
+        raise HTTPException(status_code = 404, detail = "Game not found!")
     if game.game_state != "active":
-        raise HTTPException(status_code = 403, detail = "The game is not active")
+        raise HTTPException(status_code = 403, detail = "The game is not active!")
     if request.player_name == game.player1_name:
         game.player1_score = -100
         game.player2_score = 100
@@ -210,8 +178,12 @@ async def abandon_game(request: AbandonGame):
         }
     }
 
+#
+#   The API method used for players that disconnect from the game
+#
+
 class DisconnectGame(BaseModel):
-    game_id : str
+    game_id: str
     player_name: str
 
 @app.post("/game/disconnect")
@@ -220,7 +192,7 @@ async def disconnect_game(request: DisconnectGame):
     game = session.query(Game).filter(Game.id == request.game_id).first()
 
     if not game:
-        raise HTTPException(status_code = 404, detail = "Game not found")
+        raise HTTPException(status_code = 404, detail = "Game not found!")
     
     if game.game_state == "finished":
         raise HTTPException(status_code = 403, detail = "The game is already finished!")
@@ -230,12 +202,10 @@ async def disconnect_game(request: DisconnectGame):
     elif request.player_name == game.player2_name:
         game.player2_name = ""
     else:
-        raise HTTPException(status_code = 400, detail = "No player connected with that username")
+        raise HTTPException(status_code = 400, detail = "No player connected with that username!")
     
     if not game.player1_name and not game.player2_name: #both disconnected
         game.game_state = "finished"
-        game.player1_score = -100
-        game.player2_score = -100
     else:
         game.game_state = "waiting"
         game.disconnected_at = datetime.datetime.now(datetime.timezone.utc)
