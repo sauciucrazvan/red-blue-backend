@@ -4,6 +4,7 @@ import uuid as uuid
 from database import session as db
 
 from sqlalchemy import Column, DateTime, Integer, String
+from sqlalchemy.orm import relationship
 
 Base = db.getBase()
 
@@ -18,7 +19,10 @@ class Game(Base):
     player2_score = Column(Integer, nullable=True)
     
     current_round = Column(Integer, nullable=False)
+    current_round_id = Column(String, nullable=True)
     game_state = Column(String, server_default="waiting", nullable=False)
 
     created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
     disconnected_at = Column(DateTime, nullable=True)
+
+    rounds = relationship("Round", back_populates="game")

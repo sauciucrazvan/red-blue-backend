@@ -3,6 +3,7 @@ import uuid as uuid
 from database import session as db
 
 from sqlalchemy import Column, Integer, String
+from sqlalchemy.orm import relationship
 
 Base = db.getBase()
 
@@ -17,4 +18,6 @@ class Round(Base):
     player2_choice = Column(String, nullable=True)
     player1_score = Column(Integer, nullable=True)
     player2_score = Column(Integer, nullable=True)
+
+    game = relationship("Game", back_populates="rounds")
     

@@ -9,6 +9,7 @@ from api.app import getApp
 from misc.functions import generate_game_code
 
 from models.game_model import Game
+from models.round_model import Round
 
 app = getApp()
 
@@ -118,24 +119,38 @@ async def join_game(request: JoinGame):
         "game_state": game.game_state,
     }
 
-# class ChooseColor(BaseModel):
-#     game_id: str
-#     round_number: int
-#     player_name: str
-#     choice: str
-
-# @app.post("/game/{game_id}/round/{round_number}/choice")
-# async def choose_color(request: ChooseColor):
-#     session = db.getSession()
-#     game = session.query(Game).filter(Game.id == request.game_id).first()
-#     if not game:
-#         raise HTTPException(status_code = 404, detail = "Game not found")
-#     if request.choice!="RED" or request.choice!="BLUE":
-#         raise HTTPException(status_code = 400, detail = "Invalid choice")
+class ChooseColor(BaseModel):
+    game_id: str
+    round_number: int
+    player_name: str
+    choice: str 
+@app.post("/game/{game_id}/round/{round_number}/choice")
+async def choose_color(request: ChooseColor):
+    session = db.getSession()
+    game = session.query(Game).filter(Game.id == request.game_id).first()
     
-#     if request.player_name == game.player1_name:
-        
-#     elif request.player_name == game.player2_name:
+    if not game:
+        raise HTTPException(status_code = 404, detail = "Game not found")
+    
+    if request.choice != "RED" and request.choice != "BLUE":
+        raise HTTPException(status_code = 400, detail = "Invalid choice")
+    
+    round = session.query(Round).filter(Round.game_id == game.id, Round.round_number == request.round_number).first()
+
+    if not round:
+        raise HTTPException(status_code=404, detail="Round not found")
+
+    if request.player_name == game.player1_name:
+        round.player1_choice = request.choice
+    elif request.player_name == game.player2_name:
+        round.player2_choice = request.choice
+    else:
+        raise HTTPException(status_code=400, detail="Player name does not match")
+    
+    session.commit() # Commits the changes to the database
+    session.refresh(game) # Updates the game
+
+    return {"message": "Choice registered successfully"}
 
 
 #
