@@ -136,6 +136,7 @@ class ChooseColor(BaseModel):
     round_number: int
     player_name: str
     choice: str 
+
 @app.post("/game/{game_id}/round/{round_number}/choice")
 async def choose_color(request: ChooseColor):
     session = db.getSession()
@@ -146,25 +147,82 @@ async def choose_color(request: ChooseColor):
     
     if request.choice != "RED" and request.choice != "BLUE":
         raise HTTPException(status_code = 400, detail = "Invalid choice")
-    
+
     round = session.query(Round).filter(Round.game_id == game.id, Round.round_number == request.round_number).first()
 
     if not round:
-        raise HTTPException(status_code=404, detail="Round not found")
+        round = Round(
+            game_id=game.id,
+            round_number=request.round_number,
+            player1_choice=None,
+            player2_choice=None,
+            player1_score=0,
+            player2_score=0
+        )
+        session.add(round)
+        session.commit()
+
 
     if request.player_name == game.player1_name:
+        if round.player1_choice:
+            raise HTTPException(status_code=400, detail="Already chose a color")
+        
         round.player1_choice = request.choice
     elif request.player_name == game.player2_name:
+        if round.player2_choice:
+            raise HTTPException(status_code=400, detail="Already chose a color")
+        
         round.player2_choice = request.choice
     else:
         raise HTTPException(status_code=400, detail="Player name does not match")
     
-    session.commit() # Commits the changes to the database
-    session.refresh(game) # Updates the game
+    session.commit()
+    session.refresh(game)
+
+    if round.player1_choice and round.player2_choice:
+        if round.round_number < 10:
+            next_round = Round(
+                game_id=game.id,
+                round_number=round.round_number + 1,
+                player1_choice=None,
+                player2_choice=None,
+                player1_score=0,
+                player2_score=0
+            )
+            session.add(next_round)
+            session.commit()
+            session.refresh(next_round)
+
+            await notify_game_status(
+                game_id=game.id,
+                status_update={
+                    "message": f"Round {round.round_number} completed. Next round started!",
+                    "player1_choice": round.player1_choice,
+                    "player2_choice": round.player2_choice,
+                    "next_round": next_round.round_number
+                }
+            )
+        else:
+            await notify_game_status(
+                game_id=game.id,
+                status_update={
+                    "message": "Game over! All 10 rounds completed.",
+                    "player1_choice": round.player1_choice,
+                    "player2_choice": round.player2_choice
+                }
+            )
+    else:
+        await notify_game_status(
+            game_id=game.id,
+            status_update={
+                "message": f"{request.player_name} chose {request.choice}",
+                "player1_choice": round.player1_choice,
+                "player2_choice": round.player2_choice
+            }
+        )
+
 
     return {"message": "Choice registered successfully"}
-
-
 #
 #   In case one player abandons the game, their score will be set to -100
 #   while the opponents will be set to 100, and the game is set to finished.
