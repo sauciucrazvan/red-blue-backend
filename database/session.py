@@ -14,6 +14,9 @@ base = declarative_base()
 def initConnection() -> None:
     global connection, base, session
 
+    from models.game_model import Game
+    from models.round_model import Round
+
     if config.debug:
         print("[DEBUG]: Initializing connection...")
 

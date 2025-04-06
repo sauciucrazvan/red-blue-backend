@@ -2,6 +2,7 @@ import datetime
 import re
 
 from pydantic import BaseModel
+from ws.wsManager import notify_game_status
 from database import session as db
 from fastapi import HTTPException
 
@@ -47,14 +48,15 @@ async def create_game(request: CreateGame):
         player1_name=request.player1_name,
         player1_score=0,
         game_state="waiting",
-        current_round=0
+        current_round=0,
+        current_round_id=None,
     )
 
     session.add(game)
     session.commit()
     session.refresh(game)
 
-    return {"game_id": game.id, "code": game.code}
+    return {"game_id": game.id, "code": game.code, "role": "player1"}
 
 #
 #   Gets data for a specific game by their ID
@@ -98,12 +100,16 @@ async def join_game(request: JoinGame):
     if game.game_state == "active" and game.player1_name and game.player2_name:
         raise HTTPException(status_code=403, detail="Both players are active.")
     
+    role = None
+
     if not game.player1_name:
         game.player1_name = request.player_name
         game.player1_score = 0
+        role = "player1"
     elif not game.player2_name:
         game.player2_name = request.player_name
         game.player2_score = 0
+        role = "player2"
     else:
         raise HTTPException(status_code=400, detail="No available slot for the player.")
 
@@ -113,10 +119,16 @@ async def join_game(request: JoinGame):
     session.commit() # Commits the changes to the database
     session.refresh(game) # Updates the game
     
+    await notify_game_status(
+        game_id=game.id,
+        status_update={"message": f"{request.player_name} joined the game", "state": game.game_state}
+    )
+
     return {
         "game_id": game.id,
         "player2_name": game.player2_name,
         "game_state": game.game_state,
+        "role": role,
     }
 
 class ChooseColor(BaseModel):

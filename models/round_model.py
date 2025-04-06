@@ -2,7 +2,7 @@ import uuid as uuid
 
 from database import session as db
 
-from sqlalchemy import Column, Integer, String
+from sqlalchemy import Column, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 Base = db.getBase()
@@ -10,7 +10,7 @@ Base = db.getBase()
 class Round(Base):
     __tablename__ = 'rounds'
     id = Column(String, primary_key=True, nullable=False, default = lambda: str(uuid.uuid4()))
-    game_id = Column(String, nullable = False)
+    game_id = Column(String, ForeignKey('game.id'), nullable = False)
 
     round_number = Column(Integer, nullable = False)
 
