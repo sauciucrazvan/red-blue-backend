@@ -180,6 +180,23 @@ async def choose_color(request: ChooseColor):
     session.refresh(game)
 
     if round.player1_choice and round.player2_choice:
+        if round.player1_choice == "RED" and round.player2_choice == "RED":
+            round.player1_score += 3
+            round.player2_score += 3
+        elif round.player1_choice == "BLUE" and round.player2_choice == "RED":
+            round.player1_score += 6
+            round.player2_score -= 6
+        elif round.player1_choice == "RED" and round.player2_choice == "BLUE":
+            round.player1_score -= 6
+            round.player2_score += 6
+        elif round.player1_choice == "BLUE" and round.player2_choice == "BLUE":
+            round.player1_score -= 3
+            round.player2_score -= 3
+        game.player1_total_score += round.player1_score
+        game.player2_total_score += round.player2_score
+        session.commit()
+        session.refresh(round)
+        session.refresh(game)
         if round.round_number < 10:
             next_round = Round(
                 game_id=game.id,
@@ -199,7 +216,9 @@ async def choose_color(request: ChooseColor):
                     "message": f"Round {round.round_number} completed. Next round started!",
                     "player1_choice": round.player1_choice,
                     "player2_choice": round.player2_choice,
-                    "next_round": next_round.round_number
+                    "next_round": next_round.round_number,
+                    "player1_total_score": game.player1_total_score,
+                    "player2_total_score": game.player2_total_score
                 }
             )
         else:
@@ -208,7 +227,11 @@ async def choose_color(request: ChooseColor):
                 status_update={
                     "message": "Game over! All 10 rounds completed.",
                     "player1_choice": round.player1_choice,
-                    "player2_choice": round.player2_choice
+                    "player2_choice": round.player2_choice,
+                    "player1_score": round.player1_score,
+                    "player2_score": round.player2_score,
+                    "player1_total_score": game.player1_total_score,
+                    "player2_total_score": game.player2_total_score
                 }
             )
     else:
