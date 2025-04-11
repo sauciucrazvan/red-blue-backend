@@ -250,16 +250,6 @@ async def choose_color(request: ChooseColor):
                     "player1_total_score": game.player1_total_score,
                     "player2_total_score": game.player2_total_score
                 },
-                result = {
-                    "winner": game.player1_name if game.player1_total_score and game.player2_total_score and game.player1_total_score > game.player2_total_score else
-                    game.player2_name if game.player1_total_score and game.player2_total_score and game.player2_total_score > game.player1_total_score else
-                    game.player1_name if game.player1_total_score > 0 and game.player2_total_score < 0 else
-                    game.player2_name if game.player1_total_score < 0 and game.player2_total_score > 0 else
-                    None
-                }
-
-                result = result if result["winner"] else {"loser": "No winner!"}
-                
             )
     else:
         await notify_game_status(
