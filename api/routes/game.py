@@ -192,8 +192,8 @@ async def choose_color(request: ChooseColor):
         elif round.player1_choice == "BLUE" and round.player2_choice == "BLUE":
             round.player1_score -= 3
             round.player2_score -= 3
-        game.player1_total_score += round.player1_score
-        game.player2_total_score += round.player2_score
+        game.player1_score += round.player1_score
+        game.player2_score += round.player2_score
         session.commit()
         session.refresh(round)
         session.refresh(game)
@@ -217,8 +217,8 @@ async def choose_color(request: ChooseColor):
                     "player1_choice": round.player1_choice,
                     "player2_choice": round.player2_choice,
                     "next_round": next_round.round_number,
-                    "player1_total_score": game.player1_total_score,
-                    "player2_total_score": game.player2_total_score
+                    "player1_score": game.player1_score,
+                    "player2_score": game.player2_score
                 }
             )
         else:
@@ -228,10 +228,8 @@ async def choose_color(request: ChooseColor):
                     "message": "Game over! All 10 rounds completed.",
                     "player1_choice": round.player1_choice,
                     "player2_choice": round.player2_choice,
-                    "player1_score": round.player1_score,
-                    "player2_score": round.player2_score,
-                    "player1_total_score": game.player1_total_score,
-                    "player2_total_score": game.player2_total_score
+                    "player1_score": game.player1_score,
+                    "player2_score": game.player2_score
                 }
             )
     else:

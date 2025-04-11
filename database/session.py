@@ -21,7 +21,12 @@ def initConnection() -> None:
         print("[DEBUG]: Initializing connection...")
 
     os.chdir(os.path.dirname(__file__))
-    engine = create_engine("sqlite:///red-blue.sqlite")
+    engine = create_engine("sqlite:///red-blue.sqlite",
+        pool_size=10,
+        max_overflow=20,
+        pool_timeout=30,
+        pool_recycle=120
+    )
 
     connection = engine.connect()
     session = sessionmaker(bind=engine)

@@ -21,6 +21,12 @@ async def game_websocket(websocket: WebSocket, game_id: str):
     active_connections[game_id].add(websocket)
 
     try:
+        for connection in active_connections[game_id]:
+            await connection.send_text(json.dumps({
+                "message": "A player has joined the game",
+                "active_players": len(active_connections[game_id])
+            }))
+
         while True:
             data = await websocket.receive_text()
             for connection in active_connections[game_id]:
