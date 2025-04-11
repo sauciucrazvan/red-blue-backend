@@ -180,20 +180,34 @@ async def choose_color(request: ChooseColor):
     session.refresh(game)
 
     if round.player1_choice and round.player2_choice:
-        if round.player1_choice == "RED" and round.player2_choice == "RED":
-            round.player1_score += 3
-            round.player2_score += 3
-        elif round.player1_choice == "BLUE" and round.player2_choice == "RED":
-            round.player1_score += 6
-            round.player2_score -= 6
-        elif round.player1_choice == "RED" and round.player2_choice == "BLUE":
-            round.player1_score -= 6
-            round.player2_score += 6
-        elif round.player1_choice == "BLUE" and round.player2_choice == "BLUE":
-            round.player1_score -= 3
-            round.player2_score -= 3
-        game.player1_score += round.player1_score
-        game.player2_score += round.player2_score
+        if game.current_round  < 9:
+            if round.player1_choice == "RED" and round.player2_choice == "RED":
+                round.player1_score += 3
+                round.player2_score += 3
+            elif round.player1_choice == "BLUE" and round.player2_choice == "RED":
+                round.player1_score += 6
+                round.player2_score -= 6
+            elif round.player1_choice == "RED" and round.player2_choice == "BLUE":
+                round.player1_score -= 6
+                round.player2_score += 6
+            elif round.player1_choice == "BLUE" and round.player2_choice == "BLUE":
+                round.player1_score -= 3
+                round.player2_score -= 3
+        else:
+            if round.player1_choice == "RED" and round.player2_choice == "RED":
+                round.player1_score += 6
+                round.player2_score += 6
+            elif round.player1_choice == "BLUE" and round.player2_choice == "RED":
+                round.player1_score += 12
+                round.player2_score -= 12
+            elif round.player1_choice == "RED" and round.player2_choice == "BLUE":
+                round.player1_score -= 12
+                round.player2_score += 12
+            elif round.player1_choice == "BLUE" and round.player2_choice == "BLUE":
+                round.player1_score -= 6
+                round.player2_score -= 6
+        game.player1_total_score += round.player1_score
+        game.player2_total_score += round.player2_score
         session.commit()
         session.refresh(round)
         session.refresh(game)
@@ -228,9 +242,24 @@ async def choose_color(request: ChooseColor):
                     "message": "Game over! All 10 rounds completed.",
                     "player1_choice": round.player1_choice,
                     "player2_choice": round.player2_choice,
-                    "player1_score": game.player1_score,
-                    "player2_score": game.player2_score
+                    "player1_score": round.player1_score,
+                    "player2_score": round.player2_score,
+
+                    "game_state": "finished",
+
+                    "player1_total_score": game.player1_total_score,
+                    "player2_total_score": game.player2_total_score
+                },
+                result = {
+                    "winner": game.player1_name if game.player1_total_score and game.player2_total_score and game.player1_total_score > game.player2_total_score else
+                    game.player2_name if game.player1_total_score and game.player2_total_score and game.player2_total_score > game.player1_total_score else
+                    game.player1_name if game.player1_total_score > 0 and game.player2_total_score < 0 else
+                    game.player2_name if game.player1_total_score < 0 and game.player2_total_score > 0 else
+                    None
                 }
+
+                result = result if result["winner"] else {"loser": "No winner!"}
+                
             )
     else:
         await notify_game_status(
