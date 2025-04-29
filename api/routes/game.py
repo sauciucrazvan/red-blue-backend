@@ -62,15 +62,39 @@ async def create_game(request: CreateGame):
 #   Gets data for a specific game by their ID
 #
 
+from sqlalchemy.orm import joinedload
+
 @app.get("/api/v1/game/{game_id}")
 async def get_game(game_id: str):
-    game = db.getSession().query(Game).filter(Game.id == game_id).first()
+    session = db.getSession()
+    game = session.query(Game).options(joinedload(Game.rounds)).filter(Game.id == game_id).first()
     
     if not game:
         raise HTTPException(status_code=404, detail="Game not found.")
+    
+    serialized_game = {
+        "id": game.id,
+        "code": game.code,
+        "player1_name": game.player1_name,
+        "player2_name": game.player2_name,
+        "player1_score": game.player1_score,
+        "player2_score": game.player2_score,
+        "current_round": game.current_round,
+        "game_state": game.game_state,
+        "created_at": game.created_at,
+        "disconnected_at": game.disconnected_at,
+        "rounds": [
+            {
+                "round_number": r.round_number,
+                "player1_choice": r.player1_choice,
+                "player2_choice": r.player2_choice,
+                "player1_score": r.player1_score,
+                "player2_score": r.player2_score,
+            } for r in game.rounds
+        ]
+    }
 
-    return game
-
+    return serialized_game
 #
 #   The method that allows the second player to join a lobby
 #   Requires the join code and a player name. Players will rejoin using this method.
@@ -141,14 +165,14 @@ class ChooseColor(BaseModel):
 async def choose_color(request: ChooseColor):
     session = db.getSession()
     game = session.query(Game).filter(Game.id == request.game_id).first()
-    
-    if not game:
-        raise HTTPException(status_code = 404, detail = "Game not found")
-    
-    if request.choice != "RED" and request.choice != "BLUE":
-        raise HTTPException(status_code = 400, detail = "Invalid choice")
 
-    round = session.query(Round).filter(Round.game_id == game.id, Round.round_number == request.round_number).first()
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+
+    if request.choice not in ["RED", "BLUE"]:
+        raise HTTPException(status_code=400, detail="Invalid choice")
+
+    round = next((r for r in game.rounds if r.round_number == request.round_number), None)
 
     if not round:
         round = Round(
@@ -159,58 +183,46 @@ async def choose_color(request: ChooseColor):
             player1_score=0,
             player2_score=0
         )
+        game.rounds.append(round)  # Adăugăm runda în lista de runde a jocului
         session.add(round)
         session.commit()
-
 
     if request.player_name == game.player1_name:
         if round.player1_choice:
             raise HTTPException(status_code=400, detail="Already chose a color")
-        
         round.player1_choice = request.choice
     elif request.player_name == game.player2_name:
         if round.player2_choice:
             raise HTTPException(status_code=400, detail="Already chose a color")
-        
         round.player2_choice = request.choice
     else:
         raise HTTPException(status_code=400, detail="Player name does not match")
-    
+
     session.commit()
     session.refresh(game)
 
     if round.player1_choice and round.player2_choice:
-        if game.current_round  < 9:
-            if round.player1_choice == "RED" and round.player2_choice == "RED":
-                round.player1_score += 3
-                round.player2_score += 3
-            elif round.player1_choice == "BLUE" and round.player2_choice == "RED":
-                round.player1_score += 6
-                round.player2_score -= 6
-            elif round.player1_choice == "RED" and round.player2_choice == "BLUE":
-                round.player1_score -= 6
-                round.player2_score += 6
-            elif round.player1_choice == "BLUE" and round.player2_choice == "BLUE":
-                round.player1_score -= 3
-                round.player2_score -= 3
-        else:
-            if round.player1_choice == "RED" and round.player2_choice == "RED":
-                round.player1_score += 6
-                round.player2_score += 6
-            elif round.player1_choice == "BLUE" and round.player2_choice == "RED":
-                round.player1_score += 12
-                round.player2_score -= 12
-            elif round.player1_choice == "RED" and round.player2_choice == "BLUE":
-                round.player1_score -= 12
-                round.player2_score += 12
-            elif round.player1_choice == "BLUE" and round.player2_choice == "BLUE":
-                round.player1_score -= 6
-                round.player2_score -= 6
+        multiplier = 2 if round.round_number >= 9 else 1
+        if round.player1_choice == "RED" and round.player2_choice == "RED":
+            round.player1_score += 3 * multiplier
+            round.player2_score += 3 * multiplier
+        elif round.player1_choice == "BLUE" and round.player2_choice == "RED":
+            round.player1_score += 6 * multiplier
+            round.player2_score -= 6 * multiplier
+        elif round.player1_choice == "RED" and round.player2_choice == "BLUE":
+            round.player1_score -= 6 * multiplier
+            round.player2_score += 6 * multiplier
+        elif round.player1_choice == "BLUE" and round.player2_choice == "BLUE":
+            round.player1_score -= 3 * multiplier
+            round.player2_score -= 3 * multiplier
+
         game.player1_score += round.player1_score
         game.player2_score += round.player2_score
+        game.current_round = round.round_number
         session.commit()
         session.refresh(round)
         session.refresh(game)
+
         if round.round_number < 10:
             next_round = Round(
                 game_id=game.id,
@@ -220,6 +232,7 @@ async def choose_color(request: ChooseColor):
                 player1_score=0,
                 player2_score=0
             )
+            game.rounds.append(next_round)
             session.add(next_round)
             session.commit()
             session.refresh(next_round)
@@ -236,6 +249,10 @@ async def choose_color(request: ChooseColor):
                 }
             )
         else:
+            game.game_state = "finished"
+            session.commit()
+            session.refresh(game)
+
             await notify_game_status(
                 game_id=game.id,
                 status_update={
@@ -244,22 +261,13 @@ async def choose_color(request: ChooseColor):
                     "player2_choice": round.player2_choice,
                     "player1_score": game.player1_score,
                     "player2_score": game.player2_score,
-
-                    "game_state": "finished",
-                },
+                    "game_state": game.game_state
+                }
             )
-    else:
-        await notify_game_status(
-            game_id=game.id,
-            status_update={
-                "message": f"{request.player_name} chose {request.choice}",
-                "player1_choice": round.player1_choice,
-                "player2_choice": round.player2_choice
-            }
-        )
-
 
     return {"message": "Choice registered successfully"}
+
+
 #
 #   In case one player abandons the game, their score will be set to -100
 #   while the opponents will be set to 100, and the game is set to finished.
