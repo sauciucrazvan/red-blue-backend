@@ -315,10 +315,11 @@ class AbandonGame(BaseModel):
 async def abandon_game(request: AbandonGame):
 
     session = db.getSession()
-    game = session.query(Game).filter(Game.game_id == request.game_id).first()
+    game = session.query(Game).filter(Game.id == request.game_id).first()
 
     if not game:
         raise HTTPException(status_code = 404, detail = "Game not found!")
+
     if game.game_state != "active":
         raise HTTPException(status_code = 403, detail = "The game is not active!")
     
@@ -327,25 +328,43 @@ async def abandon_game(request: AbandonGame):
     elif request.player_name == game.player2_name and request.token != game.player2_token:
         raise HTTPException(status_code=403, detail="Invalid token for player2.")
 
-    if request.player_name == game.player1_name:
-        game.player1_score = 0
-        game.player2_score = 1
-    else:
-        game.player1_score = 1
-        game.player2_score = 0
-    
+    round_diff = 10 - game.current_round
+
+    for i in range(0, round_diff):
+        multiplier = 2 if game.current_round >= 8 else 1
+        
+        game.current_round += 1
+
+        next_round = Round(
+                game_id=game.id,
+                round_number=game.current_round,
+                player1_choice=None,
+                player2_choice=None,
+                player1_score = (-6 * multiplier) if game.player1_name == request.player_name else 6 * multiplier,
+                player2_score = (-6 * multiplier) if game.player2_name == request.player_name else 6 * multiplier,
+            )        
+
+        session.add(next_round)
+        game.rounds.append(next_round)
+
+        game.player1_score = game.player1_score + ((-6 * multiplier) if game.player1_name == request.player_name else 6 * multiplier)
+        game.player2_score = game.player2_score + ((-6 * multiplier) if game.player2_name == request.player_name else 6 * multiplier)
+
+        session.commit()
+        session.refresh(game)
+        session.refresh(next_round)
+
+    game.player1_score = game.player1_score + ((-24) if game.player1_name == request.player_name else 0)
+    game.player2_score = game.player2_score + ((-24) if game.player2_name == request.player_name else 0)
+
     game.game_state = "finished"
 
-    session.commit() # Commits the changes to the database
-    session.refresh(game) # Updates the game
+    session.commit()
+    session.refresh(game)
 
-    return{
+    return {
         "response": f"{game['player1_name'] if request['player_name'] == game['player1_name'] else game['player2_name']} abandoned the game!",
         "game_state" : game.game_state,
-        "scores" : {
-            game.player1_name:game.player1_score,
-            game.player2_name:game.player2_score
-        }
     }
 
 #
