@@ -17,6 +17,8 @@ class Game(Base):
     player2_name = Column(String, nullable=True)
     player1_score = Column(Integer, nullable=True)
     player2_score = Column(Integer, nullable=True)
+    player1_token = Column(String, nullable=False, default = lambda: str(uuid.uuid4()))
+    player2_token = Column(String, nullable=False, default = lambda: str(uuid.uuid4()))
     
     current_round = Column(Integer, nullable=False)
     current_round_id = Column(String, nullable=True)
