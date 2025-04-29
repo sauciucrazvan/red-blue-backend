@@ -178,13 +178,16 @@ class ChooseColor(BaseModel):
     choice: str 
     token: str
 
-@app.post("/game/{game_id}/round/{round_number}/choice")
+@app.post("/api/v1/game/{game_id}/round/{round_number}/choice")
 async def choose_color(request: ChooseColor):
     session = db.getSession()
     game = session.query(Game).filter(Game.id == request.game_id).first()
 
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
+
+    if game.game_state == "finished":
+        raise HTTPException(status_code=403, detail="Game already finished!")
 
     if request.choice not in ["RED", "BLUE"]:
         raise HTTPException(status_code=400, detail="Invalid choice")
@@ -361,6 +364,16 @@ async def abandon_game(request: AbandonGame):
 
     session.commit()
     session.refresh(game)
+
+    await notify_game_status(
+        game_id=game.id,
+        status_update={
+            "message": f"{request.player_name} abandoned the game.",
+            "game_state": "finished",
+            "player1_score": game.player1_score,
+            "player2_score": game.player2_score,
+        }
+    )
 
     return {
         "response": f"{game['player1_name'] if request['player_name'] == game['player1_name'] else game['player2_name']} abandoned the game!",
