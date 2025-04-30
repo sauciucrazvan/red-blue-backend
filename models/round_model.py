@@ -1,3 +1,4 @@
+import datetime
 import uuid as uuid
 
 from database import session as db
@@ -18,6 +19,8 @@ class Round(Base):
     player2_choice = Column(String, nullable=True)
     player1_score = Column(Integer, nullable=True)
     player2_score = Column(Integer, nullable=True)
+
+    created_at = Column(String, nullable=False, default = lambda: str(datetime.datetime.now()))
 
     game = relationship("Game", back_populates="rounds")
     

@@ -24,7 +24,7 @@ class Game(Base):
     current_round_id = Column(String, nullable=True)
     game_state = Column(String, server_default="waiting", nullable=False)
 
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.now, nullable=False)
     disconnected_at = Column(DateTime, nullable=True)
 
     rounds = relationship("Round", back_populates="game")

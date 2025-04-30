@@ -96,6 +96,7 @@ async def get_game(game_id: str, Authorization: str = Header(None)):
                 "player2_choice": r.player2_choice,
                 "player1_score": r.player1_score,
                 "player2_score": r.player2_score,
+                "created_at": r.created_at,
             }
             for r in game.rounds
         ]
@@ -195,8 +196,6 @@ class ChooseColor(BaseModel):
     player_name: str
     choice: str 
     token: str
- 
-@app.post("/api/v1/game/{game_id}/round/{round_number}/choice")
 
 @app.post("/api/v1/game/{game_id}/round/{round_number}/choice")
 async def choose_color(request: ChooseColor):
@@ -221,7 +220,6 @@ async def choose_color(request: ChooseColor):
  
     round = next((r for r in game.rounds if r.round_number == request.round_number), None)
  
-    newRound = False
     if not round:
         round = Round(
             game_id=game.id,
@@ -229,16 +227,11 @@ async def choose_color(request: ChooseColor):
             player1_choice=None,
             player2_choice=None,
             player1_score=0,
-            player2_score=0
+            player2_score=0,
         )
         game.rounds.append(round)
         session.add(round)
         session.commit()
- 
-        newRound = True
- 
-    # if newRound or (not round.player1_choice and not round.player2_choice):
-    #     asyncio.create_task(start_round_timer(game.id, round.round_number))
  
     if request.player_name == game.player1_name:
         if round.player1_choice:
@@ -308,6 +301,17 @@ async def choose_color(request: ChooseColor):
                     "player2_score": game.player2_score,
  
                     "next_round": next_round.round_number,
+                    "rounds": [
+                        {
+                            "round_number": r.round_number,
+                            "player1_choice": r.player1_choice,
+                            "player2_choice": r.player2_choice,
+                            "player1_score": r.player1_score,
+                            "player2_score": r.player2_score,
+                            "created_at": r.created_at,
+                        }
+                        for r in game.rounds
+                    ]
                 }
             )
         else:
