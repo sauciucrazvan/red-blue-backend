@@ -237,8 +237,8 @@ async def choose_color(request: ChooseColor):
  
         newRound = True
  
-    if newRound or (not round.player1_choice and not round.player2_choice):
-        asyncio.create_task(start_round_timer(game.id, round.round_number))
+    # if newRound or (not round.player1_choice and not round.player2_choice):
+    #     asyncio.create_task(start_round_timer(game.id, round.round_number))
  
     if request.player_name == game.player1_name:
         if round.player1_choice:
