@@ -27,4 +27,7 @@ class Game(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
     disconnected_at = Column(DateTime, nullable=True)
 
+    last_active_player1 = Column(DateTime, nullable=True)
+    last_active_player2 = Column(DateTime, nullable=True)
+
     rounds = relationship("Round", back_populates="game")

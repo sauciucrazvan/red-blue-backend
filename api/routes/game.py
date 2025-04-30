@@ -1,6 +1,8 @@
 import datetime
 import re
 
+from datetime import datetime, timedelta
+
 from pydantic import BaseModel
 from ws.wsManager import notify_game_status
 from database import session as db
@@ -196,6 +198,16 @@ async def choose_color(request: ChooseColor):
     elif request.player_name not in [game.player1_name, game.player2_name]:
         raise HTTPException(status_code=400, detail="Player name does not match")
 
+    now = datetime.utcnow()
+    if request.player_name == game.player1_name:
+        if game.last_active_player1 and (now - game.last_active_player1 > timedelta(minutes=10)):
+            return await handle_abandon(session, game, request.player_name)
+        game.last_active_player1 = now
+    elif request.player_name == game.player2_name:
+        if game.last_active_player2 and (now - game.last_active_player2 > timedelta(minutes=10)):
+            return await handle_abandon(session, game, request.player_name)
+        game.last_active_player2 = now
+
     round = next((r for r in game.rounds if r.round_number == request.round_number), None)
 
     if not round:
@@ -302,8 +314,9 @@ async def choose_color(request: ChooseColor):
 
 
 #
-#   In case one player abandons the game, their score will be set to 0
-#   while the opponents will be set to 1, and the game is set to finished.
+#   In case one player abandons the game, their score receives a -24 penalty
+#   And for the remaining rounds receives the minimum score (-6) for each round and double for the last two rounds
+#   The game state is set to finished and the game is saved in the database
 #
 
 class AbandonGame(BaseModel):
@@ -365,6 +378,42 @@ async def abandon_game(request: AbandonGame):
     return {
         "response": f"{game['player1_name'] if request['player_name'] == game['player1_name'] else game['player2_name']} abandoned the game!",
         "game_state" : game.game_state,
+    }
+
+async def handle_abandon(session, game, player_name):
+    round_diff = 10 - game.current_round
+
+    for i in range(round_diff):
+        multiplier = 2 if game.current_round >= 8 else 1
+        game.current_round += 1
+
+        next_round = Round(
+            game_id=game.id,
+            round_number=game.current_round,
+            player1_choice=None,
+            player2_choice=None,
+            player1_score=(-6 * multiplier) if game.player1_name == player_name else 6 * multiplier,
+            player2_score=(-6 * multiplier) if game.player2_name == player_name else 6 * multiplier,
+        )
+
+        session.add(next_round)
+        game.rounds.append(next_round)
+
+        game.player1_score += (-6 * multiplier) if game.player1_name == player_name else 6 * multiplier
+        game.player2_score += (-6 * multiplier) if game.player2_name == player_name else 6 * multiplier
+
+    if game.player1_name == player_name:
+        game.player1_score -= 24
+    else:
+        game.player2_score -= 24
+
+    game.game_state = "finished"
+    session.commit()
+    session.refresh(game)
+
+    return {
+        "response": f"{player_name} abandoned the game due to inactivity!",
+        "game_state": game.game_state,
     }
 
 #
