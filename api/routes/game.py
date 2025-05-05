@@ -23,8 +23,11 @@ app = getApp()
 @app.get("/api/v1/games")
 async def list_games(page: int = 1, page_size: int = 10):
     games = db.getSession().query(Game).offset((page - 1) * page_size).limit(page_size).all()
+    
     return {
-        "games_found": len(games),
+        "page": page,
+        "page_size": page_size,
+        "found_games": len(games),
         "games": [
             {
                 "id": game.id,
