@@ -23,7 +23,35 @@ app = getApp()
 @app.get("/api/v1/games")
 async def list_games(page: int = 1, page_size: int = 10):
     games = db.getSession().query(Game).offset((page - 1) * page_size).limit(page_size).all()
-    return games
+    return {
+        "games_found": len(games),
+        "games": [
+            {
+                "id": game.id,
+                "code": game.code,
+                "player1_name": game.player1_name,
+                "player2_name": game.player2_name,
+                "player1_score": game.player1_score,
+                "player2_score": game.player2_score,
+                "current_round": game.current_round,
+                "game_state": game.game_state,
+                "created_at": game.created_at,
+                "disconnected_at": game.disconnected_at,
+                "rounds": [
+                    {
+                        "round_number": r.round_number,
+                        "player1_choice": r.player1_choice,
+                        "player2_choice": r.player2_choice,
+                        "player1_score": r.player1_score,
+                        "player2_score": r.player2_score,
+                        "created_at": r.created_at,
+                    }
+                    for r in game.rounds
+                ]
+            }
+            for game in games
+        ]
+    }
  
 #
 #   Creates a game and returns the created game ID and the join code
