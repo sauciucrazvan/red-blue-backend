@@ -87,9 +87,31 @@ async def create_game(request: CreateGame):
     session.add(game)
     session.commit()
     session.refresh(game)
- 
+
+
+    asyncio.create_task(start_lobby_expire_timer(game.id))
     return {"game_id": game.id, "code": game.code, "role": "player1", "token": game.player1_token}
  
+async def start_lobby_expire_timer(game_id: int):
+    await asyncio.sleep(600)
+
+    session = db.getSession()
+    game = session.query(Game).filter(Game.id == game_id).first()
+
+    if not game:
+        session.close()
+        return
+
+    if game.current_round >= 1:
+        return
+    
+    session.query(Game).filter(Game.id == game_id).delete()
+
+    session.commit()
+    session.refresh(Game)
+
+    session.close()
+
 #
 #   Gets data for a specific game by their ID
 #
@@ -366,6 +388,8 @@ async def choose_color(request: ChooseColor):
  
     return {"message": "Choice registered successfully"}
  
+
+
 async def start_round_timer(game_id: int, round_number: int):
     await asyncio.sleep(60)
  
