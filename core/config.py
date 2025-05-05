@@ -1,4 +1,4 @@
-debug = True
+debug = False
 
 # Uvicorn server
 uvicorn_host = "localhost"
