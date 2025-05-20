@@ -3,7 +3,7 @@ import datetime
 import re
  
 from pydantic import BaseModel
-from backend.core import config
+from core import config
 from ws.wsManager import notify_game_status
 from database import session as db
 from fastapi import HTTPException, Header
@@ -24,11 +24,12 @@ app = getApp()
 @app.get("/api/v1/games")
 async def list_games(page: int = 1, page_size: int = 10):
     games = db.getSession().query(Game).offset((page - 1) * page_size).limit(page_size).all()
-    
+    total_games_size = len(db.getSession().query(Game).all())
+
     return {
         "page": page,
         "page_size": page_size,
-        "found_games": len(games),
+        "found_games": total_games_size,
         "games": [
             {
                 "id": game.id,
@@ -37,7 +38,7 @@ async def list_games(page: int = 1, page_size: int = 10):
                 "player2_name": game.player2_name,
                 "player1_score": game.player1_score,
                 "player2_score": game.player2_score,
-                "current_round": game.current_round,
+                "current_round": len(game.rounds),
                 "game_state": game.game_state,
                 "created_at": game.created_at,
                 "disconnected_at": game.disconnected_at,
@@ -88,7 +89,6 @@ async def create_game(request: CreateGame):
     session.add(game)
     session.commit()
     session.refresh(game)
-
 
     asyncio.create_task(start_lobby_expire_timer(game.id))
     return {"game_id": game.id, "code": game.code, "role": "player1", "token": game.player1_token}
@@ -145,7 +145,7 @@ async def get_game(game_id: str, Authorization: str = Header(None)):
         "player2_name": game.player2_name,
         "player1_score": game.player1_score,
         "player2_score": game.player2_score,
-        "current_round": game.current_round,
+        "current_round": len(game.rounds),
         "game_state": game.game_state,
         "created_at": game.created_at,
         "disconnected_at": game.disconnected_at,
@@ -187,8 +187,11 @@ async def join_game(request: JoinGame):
     if not game:
         raise HTTPException(status_code = 404, detail = "Game not found!")
  
+    if game.game_state == "finished":
+        raise HTTPException(status_code=403, detail="Game already finished!")
+
     if game.player1_name == request.player_name or game.player2_name == request.player_name:
-            raise HTTPException(status_code=403, detail="There are no free slots available.")
+            raise HTTPException(status_code=403, detail="There is already a player with that name playing right now!")
  
     if game.game_state == "active" and game.player1_name and game.player2_name:
         raise HTTPException(status_code=403, detail="Both players are active.")
@@ -198,20 +201,21 @@ async def join_game(request: JoinGame):
  
     if not game.player1_name:
         game.player1_name = request.player_name
-        game.player1_score = 0
+        game.player1_score = game.player1_score if game.player1_score else 0
         role = "player1"
         token = game.player1_token
     elif not game.player2_name:
         game.player2_name = request.player_name
-        game.player2_score = 0
+        game.player2_score = game.player2_score if game.player2_score else 0
         role = "player2"
         token = game.player2_token
     else:
         raise HTTPException(status_code=400, detail="No available slot for the player.")
  
-    game.game_state = "active"
-    game.current_round = 1 if not game.current_round else game.current_round
- 
+    if game.player1_name and game.player2_name:
+        game.game_state = "active"
+        game.current_round = 1 if not game.current_round else game.current_round
+
     session.commit() # Commits the changes to the database
     session.refresh(game) # Updates the game
  
@@ -219,18 +223,19 @@ async def join_game(request: JoinGame):
         game_id=game.id,
         status_update={
             "message": f"{request.player_name} joined the game", 
-            "state": game.game_state,
+            "game_state": game.game_state,
+            "current_round": game.current_round,
             "player1_name": game.player1_name,
             "player2_name": game.player2_name
         }
     )
  
-    if game.player1_name and game.player2_name and game.current_round == 1:
-        existing_round = next((r for r in game.rounds if r.round_number == 1), None)
+    if game.player1_name and game.player2_name and game.current_round:
+        existing_round = next((r for r in game.rounds if r.round_number == game.current_round), None)
         if not existing_round:
             round = Round(
                 game_id=game.id,
-                round_number=1,
+                round_number=game.current_round,
                 player1_choice=None,
                 player2_choice=None,
                 player1_score=0,
@@ -240,11 +245,14 @@ async def join_game(request: JoinGame):
             session.add(round)
             session.commit()
             session.refresh(round)
-        asyncio.create_task(start_round_timer(game.id, 1))
+        asyncio.create_task(start_round_timer(game.id, game.current_round))
  
     return {
         "game_id": game.id,
+        "player1_name": game.player1_name,
         "player2_name": game.player2_name,
+        "player1_score": game.player1_score,
+        "player2_score": game.player2_score,
         "game_state": game.game_state,
         "role": role,
         "token": token,
@@ -265,8 +273,8 @@ async def choose_color(request: ChooseColor):
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
  
-    if game.game_state == "finished":
-        raise HTTPException(status_code=403, detail="Game already finished!")
+    if game.game_state != "active":
+        raise HTTPException(status_code=403, detail="The game is not active")
  
     if request.choice not in ["RED", "BLUE"]:
         raise HTTPException(status_code=400, detail="Invalid choice")
@@ -343,6 +351,7 @@ async def choose_color(request: ChooseColor):
             )
  
             game.rounds.append(next_round)
+            game.current_round = round.round_number + 1
  
             session.add(next_round)
             session.commit()
@@ -534,38 +543,49 @@ async def abandon_game(request: AbandonGame):
 #   The API method used for players that disconnect from the game
 #
  
-# class DisconnectGame(BaseModel):
-#     game_id: str
-#     player_name: str
+class DisconnectGame(BaseModel):
+    game_id: str
+    player_name: str
  
-# @app.post("/api/v1/game/disconnect")
-# async def disconnect_game(request: DisconnectGame):
-#     session = db.getSession()
-#     game = session.query(Game).filter(Game.id == request.game_id).first()
+@app.post("/api/v1/game/{game_id}/disconnect")
+async def disconnect_game(request: DisconnectGame):
+    print(f"Starting: [disconnect event on game: {request.game_id}, player_name: {request.player_name}]")
+
+    session = db.getSession()
+    game = session.query(Game).filter(Game.id == request.game_id).first()
  
-#     if not game:
-#         raise HTTPException(status_code = 404, detail = "Game not found!")
+    if not game:
+        raise HTTPException(status_code = 404, detail = "Game not found!")
  
-#     if game.game_state == "finished":
-#         raise HTTPException(status_code = 403, detail = "The game is already finished!")
+    if game.game_state == "finished":
+        raise HTTPException(status_code = 403, detail = "The game is already finished!")
+    
+    if request.player_name == game.player1_name:
+        game.player1_name = None
+    elif request.player_name == game.player2_name:
+        game.player2_name = None
  
-#     if request.player_name == game.player1_name:
-#         game.player1_name = ""
-#     elif request.player_name == game.player2_name:
-#         game.player2_name = ""
-#     else:
-#         raise HTTPException(status_code = 400, detail = "No player connected with that username!")
+    session.query(Game).filter(Game.id == request.game_id).update({
+        "player1_name": None if request.player_name == game.player1_name else game.player1_name,
+        "player2_name": None if request.player_name == game.player2_name else game.player2_name,
+        "game_state": "pause" if game.player1_name or game.player2_name else "finished",
+        "disconnected_at": datetime.datetime.now(datetime.timezone.utc)
+    })
  
-#     if not game.player1_name and not game.player2_name: #both disconnected
-#         game.game_state = "finished"
-#     else:
-#         game.game_state = "waiting"
-#         game.disconnected_at = datetime.datetime.now(datetime.timezone.utc)
+    session.commit() # Commits the changes to the database
+    session.refresh(game) # Updates the game
+
+    await notify_game_status(
+        game_id=game.id,
+        status_update={
+            "message": f"{request.player_name} left the game. Waiting for him to join back...",
+            "game_state": game.game_state,
+        }
+    )
+
+    print(f"Ending: [disconnect event on game: {request.game_id}]")
  
-#     session.commit() # Commits the changes to the database
-#     session.refresh(game) # Updates the game
- 
-#     return {
-#         "message": f"{request.player_name} disconnected from the game!",
-#         "game_state": game.game_state,
-#     }
+    return {
+        "message": f"{request.player_name} disconnected from the game!",
+        "game_state": game.game_state,
+    }

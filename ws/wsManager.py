@@ -23,7 +23,7 @@ async def game_websocket(websocket: WebSocket, game_id: str):
     try:
         for connection in active_connections[game_id]:
             await connection.send_text(json.dumps({
-                "message": "A player has joined the game",
+                "message": "Your opponent has joined the game",
                 "active_players": len(active_connections[game_id])
             }))
 
