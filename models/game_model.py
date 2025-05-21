@@ -25,6 +25,7 @@ class Game(Base):
     game_state = Column(String, server_default="waiting", nullable=False)
 
     created_at = Column(DateTime, default=datetime.datetime.now, nullable=False)
+    finished_at = Column(DateTime, nullable=True)
     disconnected_at = Column(DateTime, nullable=True)
 
     rounds = relationship("Round", back_populates="game")

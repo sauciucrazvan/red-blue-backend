@@ -385,6 +385,7 @@ async def choose_color(request: ChooseColor):
             )
         else:
             game.game_state = "finished"
+            game.finished_at = datetime.datetime.now
             session.commit()
             session.refresh(game)
  
