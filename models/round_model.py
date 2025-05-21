@@ -20,7 +20,7 @@ class Round(Base):
     player1_score = Column(Integer, nullable=True)
     player2_score = Column(Integer, nullable=True)
 
-    created_at = Column(String, nullable=False, default = lambda: str(datetime.datetime.now()))
+    created_at = Column(String, nullable=False, default = lambda: str(datetime.datetime.now(datetime.timezone.utc)))
 
     game = relationship("Game", back_populates="rounds")
     
