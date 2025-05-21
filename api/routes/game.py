@@ -542,6 +542,37 @@ async def abandon_game(request: AbandonGame):
     }
  
 #
+#   Deletes a game by its ID if its in "waiting" state
+#
+ 
+@app.delete("/api/v1/game/{game_id}/delete")
+async def delete_game(game_id: str, Authorization: str = Header(None)):
+    session = db.getSession()
+    game = session.query(Game).filter(Game.id == game_id).first()
+ 
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found.")
+ 
+    if game.game_state != "waiting":
+        raise HTTPException(status_code=403, detail="Game cannot be deleted. It is already in progress.")
+ 
+    token = Authorization.split(" ")[1] if Authorization else None
+ 
+    if token not in [game.player1_token, game.player2_token]:
+        raise HTTPException(status_code=403, detail="Invalid token.")
+ 
+ 
+    session.delete(game)
+    session.commit()
+    session.close()
+ 
+    if config.debug:
+        print(f"[LOGS]: Destroyed lobby {game_id} by request.")
+ 
+    return {"message": "Game deleted successfully."}
+
+
+#
 #   The API method used for players that disconnect from the game
 #
  
@@ -591,3 +622,13 @@ async def disconnect_game(request: DisconnectGame):
         "message": f"{request.player_name} disconnected from the game!",
         "game_state": game.game_state,
     }
+
+
+
+
+
+
+
+
+
+
