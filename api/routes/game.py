@@ -41,6 +41,7 @@ async def list_games(page: int = 1, page_size: int = 10):
                 "current_round": len(game.rounds),
                 "game_state": game.game_state,
                 "created_at": game.created_at,
+                "finished_at": game.finished_at,
                 "disconnected_at": game.disconnected_at,
                 "rounds": [
                     {
@@ -148,6 +149,7 @@ async def get_game(game_id: str, Authorization: str = Header(None)):
         "current_round": len(game.rounds),
         "game_state": game.game_state,
         "created_at": game.created_at,
+        "finished_at": game.finished_at,
         "disconnected_at": game.disconnected_at,
         "rounds": [
             {
@@ -385,7 +387,7 @@ async def choose_color(request: ChooseColor):
             )
         else:
             game.game_state = "finished"
-            game.finished_at = datetime.datetime.now
+            game.finished_at = datetime.datetime.now(datetime.timezone.utc)
             session.commit()
             session.refresh(game)
  
@@ -404,8 +406,6 @@ async def choose_color(request: ChooseColor):
             )
  
     return {"message": "Choice registered successfully"}
- 
-
 
 async def start_round_timer(game_id: int, round_number: int):
     await asyncio.sleep(60)
