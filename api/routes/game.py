@@ -85,6 +85,7 @@ async def create_game(request: CreateGame):
         game_state="waiting",
         current_round=0,
         current_round_id=None,
+        created_at=datetime.datetime.now(datetime.timezone.utc)
     )
  
     session.add(game)
