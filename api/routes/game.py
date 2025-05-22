@@ -23,10 +23,13 @@ app = getApp()
  
 @app.get("/api/v1/games")
 async def list_games(page: int = 1, page_size: int = 10):
-    games = db.getSession().query(Game).order_by(Game.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
-    total_games_size = len(db.getSession().query(Game).all())
+    from sqlalchemy.orm import joinedload
+    session = db.getSession()
+    dbGames = session.query(Game)
+    games = dbGames.options(joinedload(Game.rounds)).order_by(Game.id.desc()).order_by(Game.game_state == "active").offset((page - 1) * page_size).limit(page_size).all()
+    total_games_size = dbGames.count()
 
-    return {
+    result = {
         "page": page,
         "page_size": page_size,
         "found_games": total_games_size,
@@ -59,6 +62,8 @@ async def list_games(page: int = 1, page_size: int = 10):
             for game in games
         ]
     }
+    session.close()
+    return result
  
 #
 #   Creates a game and returns the created game ID and the join code
