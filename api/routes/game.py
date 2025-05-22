@@ -26,7 +26,11 @@ async def list_games(page: int = 1, page_size: int = 10):
     from sqlalchemy.orm import joinedload
     session = db.getSession()
     dbGames = session.query(Game)
-    games = dbGames.options(joinedload(Game.rounds)).order_by(Game.id.desc()).order_by(Game.game_state == "active").offset((page - 1) * page_size).limit(page_size).all()
+    from sqlalchemy import case
+    games = dbGames.options(joinedload(Game.rounds)).order_by(
+        case((Game.game_state == "active", 0), else_=1),
+        Game.id.desc()
+    ).offset((page - 1) * page_size).limit(page_size).all()
     total_games_size = dbGames.count()
 
     result = {
