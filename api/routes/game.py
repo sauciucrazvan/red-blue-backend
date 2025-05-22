@@ -38,11 +38,12 @@ async def list_games(page: int = 1, page_size: int = 10):
                 "player2_name": game.player2_name,
                 "player1_score": game.player1_score,
                 "player2_score": game.player2_score,
+                "player1_disconnected_at": game.player1_disconnected_at,
+                "player2_disconnected_at": game.player2_disconnected_at,
                 "current_round": len(game.rounds),
                 "game_state": game.game_state,
                 "created_at": game.created_at,
                 "finished_at": game.finished_at,
-                "disconnected_at": game.disconnected_at,
                 "rounds": [
                     {
                         "round_number": r.round_number,
@@ -147,11 +148,12 @@ async def get_game(game_id: str, Authorization: str = Header(None)):
         "player2_name": game.player2_name,
         "player1_score": game.player1_score,
         "player2_score": game.player2_score,
+        "player1_disconnected_at": game.player1_disconnected_at,
+        "player2_disconnected_at": game.player2_disconnected_at,
         "current_round": len(game.rounds),
         "game_state": game.game_state,
         "created_at": game.created_at,
         "finished_at": game.finished_at,
-        "disconnected_at": game.disconnected_at,
         "rounds": [
             {
                 "round_number": r.round_number,
@@ -579,6 +581,7 @@ async def delete_game(game_id: str, Authorization: str = Header(None)):
 class DisconnectGame(BaseModel):
     game_id: str
     player_name: str
+    token: str
  
 @app.post("/api/v1/game/{game_id}/disconnect")
 async def disconnect_game(request: DisconnectGame):
@@ -590,19 +593,27 @@ async def disconnect_game(request: DisconnectGame):
     if not game:
         raise HTTPException(status_code = 404, detail = "Game not found!")
  
-    if game.game_state == "finished":
-        raise HTTPException(status_code = 403, detail = "The game is already finished!")
+    if game.game_state == "waiting" or game.game_state == "finished":
+        raise HTTPException(status_code = 403, detail = "The game is not active!")
     
-    if request.player_name == game.player1_name:
-        game.player1_name = None
-    elif request.player_name == game.player2_name:
-        game.player2_name = None
- 
+    if request.player_name == game.player1_name and game.player1_disconnected_at:
+        raise HTTPException(status_code = 403, detail = "Player1 already disconnected!")
+    if request.player_name == game.player2_name and game.player2_disconnected_at:
+        raise HTTPException(status_code = 403, detail = "Player2 already disconnected!")
+    
+    if request.player_name == game.player1_name and request.token != game.player1_token:
+        raise HTTPException(status_code=403, detail="Invalid token for player1.")
+    elif request.player_name == game.player2_name and request.token != game.player2_token:
+        raise HTTPException(status_code=403, detail="Invalid token for player2.")
+    elif request.player_name not in [game.player1_name, game.player2_name]:
+        raise HTTPException(status_code=400, detail="Player name does not match")
+
     session.query(Game).filter(Game.id == request.game_id).update({
         "player1_name": None if request.player_name == game.player1_name else game.player1_name,
         "player2_name": None if request.player_name == game.player2_name else game.player2_name,
+        "player1_disconnected_at": datetime.datetime.now(datetime.timezone.utc) if request.player_name == game.player1_name else game.player1_disconnected_at,
+        "player2_disconnected_at": datetime.datetime.now(datetime.timezone.utc) if request.player_name == game.player2_name else game.player2_disconnected_at,
         "game_state": "pause" if game.player1_name or game.player2_name else "finished",
-        "disconnected_at": datetime.datetime.now(datetime.timezone.utc)
     })
  
     session.commit() # Commits the changes to the database
@@ -616,6 +627,8 @@ async def disconnect_game(request: DisconnectGame):
         }
     )
 
+    asyncio.create_task(check_disconnection_timer(game.id))
+
     print(f"Ending: [disconnect event on game: {request.game_id}]")
  
     return {
@@ -623,12 +636,45 @@ async def disconnect_game(request: DisconnectGame):
         "game_state": game.game_state,
     }
 
+async def check_disconnection_timer(game_id: str):
+    time = 600
+    if config.debug:
+        time = 60
 
+    await asyncio.sleep(time)
 
+    session = db.getSession()
+    game = session.query(Game).filter(Game.id == game_id).first()
 
+    if not game:
+        session.close()
+        return
 
+    if game.game_state != "pause":
+        session.close()
+        return
 
-
-
-
-
+    if game.player1_disconnected_at and (datetime.datetime.now(datetime.timezone.utc) - game.player1_disconnected_at).total_seconds() > 600:
+        await notify_game_status(
+            game_id=game.id,
+            status_update={
+                "message": f"{game.player1_name} has been disconnected for more than 10 minutes. Game will be deleted.",
+                "game_state": "finished",
+            }
+        )
+        session.delete(game)
+        session.commit()
+        session.close()
+        return
+    if game.player2_disconnected_at and (datetime.datetime.now(datetime.timezone.utc) - game.player2_disconnected_at).total_seconds() > 600:
+        await notify_game_status(
+            game_id=game.id,
+            status_update={
+                "message": f"{game.player2_name} has been disconnected for more than 10 minutes. Game will be deleted.",
+                "game_state": "finished",
+            }
+        )
+        session.delete(game)
+        session.commit()
+        session.close()
+        return
