@@ -118,7 +118,6 @@ async def start_lobby_expire_timer(game_id: int):
         print(f"[LOGS]: Destroyed lobby {game_id} due to inactivity.")
 
     session.commit()
-    session.refresh(game)
 
     session.close()
 
