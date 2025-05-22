@@ -23,7 +23,7 @@ app = getApp()
  
 @app.get("/api/v1/games")
 async def list_games(page: int = 1, page_size: int = 10):
-    games = db.getSession().query(Game).offset((page - 1) * page_size).limit(page_size).all()
+    games = db.getSession().query(Game).order_by(Game.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
     total_games_size = len(db.getSession().query(Game).all())
 
     return {
@@ -649,7 +649,7 @@ async def check_disconnection_timer(game_id: str):
     if config.debug:
         time = 60
 
-    await asyncio.sleep(time)
+    await asyncio.sleep(time + 10)
 
     session = db.getSession()
     game = session.query(Game).filter(Game.id == game_id).first()
@@ -662,28 +662,37 @@ async def check_disconnection_timer(game_id: str):
         session.close()
         return
 
-    if game.player1_disconnected_at and (datetime.datetime.now(datetime.timezone.utc) - game.player1_disconnected_at).total_seconds() > 600:
-        await notify_game_status(
-            game_id=game.id,
-            status_update={
-                "message": f"{game.player1_name} has been disconnected for more than 10 minutes. Game will be deleted.",
-                "game_state": "finished",
-            }
-        )
-        session.delete(game)
-        session.commit()
-        session.close()
-        return
-    
-    if game.player2_disconnected_at and (datetime.datetime.now(datetime.timezone.utc) - game.player2_disconnected_at).total_seconds() > 600:
-        await notify_game_status(
-            game_id=game.id,
-            status_update={
-                "message": f"{game.player2_name} has been disconnected for more than 10 minutes. Game will be deleted.",
-                "game_state": "finished",
-            }
-        )
-        session.delete(game)
-        session.commit()
-        session.close()
-        return
+    now = datetime.datetime.now(datetime.timezone.utc)
+    if game.player1_disconnected_at:
+        player1_disconnected_at = game.player1_disconnected_at
+        if player1_disconnected_at.tzinfo is None:
+            player1_disconnected_at = player1_disconnected_at.replace(tzinfo=datetime.timezone.utc)
+        if (now - player1_disconnected_at).total_seconds() > time:
+            await notify_game_status(
+                game_id=game.id,
+                status_update={
+                    "message": f"{game.player1_name} has been disconnected for more than 10 minutes. Game will be deleted.",
+                    "game_state": "finished",
+                }
+            )
+            session.delete(game)
+            session.commit()
+            session.close()
+            return
+
+    if game.player2_disconnected_at:
+        player2_disconnected_at = game.player2_disconnected_at
+        if player2_disconnected_at.tzinfo is None:
+            player2_disconnected_at = player2_disconnected_at.replace(tzinfo=datetime.timezone.utc)
+        if (now - player2_disconnected_at).total_seconds() > time:
+            await notify_game_status(
+                game_id=game.id,
+                status_update={
+                    "message": f"{game.player2_name} has been disconnected for more than 10 minutes. Game will be deleted.",
+                    "game_state": "finished",
+                }
+            )
+            session.delete(game)
+            session.commit()
+            session.close()
+            return
