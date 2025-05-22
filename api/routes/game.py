@@ -207,11 +207,13 @@ async def join_game(request: JoinGame):
     if not game.player1_name:
         game.player1_name = request.player_name
         game.player1_score = game.player1_score if game.player1_score else 0
+        game.player1_disconnected_at = None
         role = "player1"
         token = game.player1_token
     elif not game.player2_name:
         game.player2_name = request.player_name
         game.player2_score = game.player2_score if game.player2_score else 0
+        game.player2_disconnected_at = None
         role = "player2"
         token = game.player2_token
     else:
@@ -589,10 +591,10 @@ async def disconnect_game(request: DisconnectGame):
 
     session = db.getSession()
     game = session.query(Game).filter(Game.id == request.game_id).first()
- 
+
     if not game:
         raise HTTPException(status_code = 404, detail = "Game not found!")
- 
+
     if game.game_state == "waiting" or game.game_state == "finished":
         raise HTTPException(status_code = 403, detail = "The game is not active!")
     
@@ -608,16 +610,11 @@ async def disconnect_game(request: DisconnectGame):
     elif request.player_name not in [game.player1_name, game.player2_name]:
         raise HTTPException(status_code=400, detail="Player name does not match")
 
-    session.query(Game).filter(Game.id == request.game_id).update({
-        "player1_name": None if request.player_name == game.player1_name else game.player1_name,
-        "player2_name": None if request.player_name == game.player2_name else game.player2_name,
-        "player1_disconnected_at": datetime.datetime.now(datetime.timezone.utc) if request.player_name == game.player1_name else game.player1_disconnected_at,
-        "player2_disconnected_at": datetime.datetime.now(datetime.timezone.utc) if request.player_name == game.player2_name else game.player2_disconnected_at,
-        "game_state": "pause" if game.player1_name or game.player2_name else "finished",
-    })
- 
-    session.commit() # Commits the changes to the database
-    session.refresh(game) # Updates the game
+    if game.rounds:
+        last_round = sorted(game.rounds, key=lambda r: r.round_number)[-1]
+        if not (last_round.player1_choice and last_round.player2_choice):
+            session.delete(last_round)
+            game.rounds.remove(last_round)
 
     await notify_game_status(
         game_id=game.id,
@@ -627,10 +624,22 @@ async def disconnect_game(request: DisconnectGame):
         }
     )
 
+    session.query(Game).filter(Game.id == request.game_id).update({
+        "player1_name": None if request.player_name == game.player1_name else game.player1_name,
+        "player2_name": None if request.player_name == game.player2_name else game.player2_name,
+        "player1_disconnected_at": datetime.datetime.now(datetime.timezone.utc) if request.player_name == game.player1_name else game.player1_disconnected_at,
+        "player2_disconnected_at": datetime.datetime.now(datetime.timezone.utc) if request.player_name == game.player2_name else game.player2_disconnected_at,
+        "game_state": "pause" if game.player1_name or game.player2_name else "finished",
+        "current_round": game.current_round,
+    })
+
+    session.commit() # Commits the changes to the database
+    session.refresh(game) # Updates the game
+
     asyncio.create_task(check_disconnection_timer(game.id))
 
     print(f"Ending: [disconnect event on game: {request.game_id}]")
- 
+
     return {
         "message": f"{request.player_name} disconnected from the game!",
         "game_state": game.game_state,
@@ -666,6 +675,7 @@ async def check_disconnection_timer(game_id: str):
         session.commit()
         session.close()
         return
+    
     if game.player2_disconnected_at and (datetime.datetime.now(datetime.timezone.utc) - game.player2_disconnected_at).total_seconds() > 600:
         await notify_game_status(
             game_id=game.id,
