@@ -684,7 +684,12 @@ async def check_disconnection_timer(game_id: str):
                     "game_state": "finished",
                 }
             )
+            
+            for r in list(game.rounds):
+                session.delete(r)
+
             session.delete(game)
+            
             session.commit()
             session.close()
             return
@@ -701,6 +706,10 @@ async def check_disconnection_timer(game_id: str):
                     "game_state": "finished",
                 }
             )
+            
+            for r in list(game.rounds):
+                session.delete(r)
+
             session.delete(game)
             session.commit()
             session.close()
