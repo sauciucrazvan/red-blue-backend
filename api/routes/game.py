@@ -22,7 +22,12 @@ app = getApp()
 #
  
 @app.get("/api/v1/games")
-async def list_games(page: int = 1, page_size: int = 10, admin_token: str = None):
+async def list_games(
+    page: int = 1,
+    page_size: int = 10,
+    admin_token: str = None,
+    game_state: str = None
+):
     if admin_token != config.admin_token:
         raise HTTPException(status_code=403, detail="Invalid admin token.")
     
@@ -30,12 +35,17 @@ async def list_games(page: int = 1, page_size: int = 10, admin_token: str = None
         raise HTTPException(status_code=400, detail="Page must be greater than 0.")
 
     from sqlalchemy.orm import joinedload
+    from sqlalchemy import case
+
     session = db.getSession()
     dbGames = session.query(Game)
-    from sqlalchemy import case
+
+    if game_state:
+        dbGames = dbGames.filter(Game.game_state == game_state)
+
     games = dbGames.options(joinedload(Game.rounds)).order_by(
         case((Game.game_state == "active", 0), else_=1),
-        Game.id.desc()
+        Game.created_at.desc()
     ).offset((page - 1) * page_size).limit(page_size).all()
     total_games_size = dbGames.count()
 

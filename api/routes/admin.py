@@ -41,6 +41,8 @@ def cleanup(request: CleanupRequest):
 
     for game in games:
         try:
+            for round in game.rounds:
+                session.delete(round)
             session.delete(game)
             session.commit()
         except Exception as e:
