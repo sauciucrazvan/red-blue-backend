@@ -22,7 +22,13 @@ app = getApp()
 #
  
 @app.get("/api/v1/games")
-async def list_games(page: int = 1, page_size: int = 10):
+async def list_games(page: int = 1, page_size: int = 10, admin_token: str = None):
+    if admin_token != config.admin_token:
+        raise HTTPException(status_code=403, detail="Invalid admin token.")
+    
+    if page < 1:
+        raise HTTPException(status_code=400, detail="Page must be greater than 0.")
+
     from sqlalchemy.orm import joinedload
     session = db.getSession()
     dbGames = session.query(Game)

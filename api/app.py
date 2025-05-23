@@ -8,6 +8,7 @@ app = FastAPI()
 def runApp():
     # Routes
     from api.routes import game
+    from api.routes import admin
     from ws import wsManager
 
     app.add_middleware(
