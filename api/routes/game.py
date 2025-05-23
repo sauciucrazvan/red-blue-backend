@@ -549,7 +549,7 @@ async def abandon_game(request: AbandonGame):
     game.player1_score = game.player1_score + ((-24) if game.player1_name == request.player_name else 0)
     game.player2_score = game.player2_score + ((-24) if game.player2_name == request.player_name else 0)
  
-    game.game_state = "finished"
+    game.game_state = "abandoned"
  
     session.commit()
     session.refresh(game)
@@ -558,7 +558,7 @@ async def abandon_game(request: AbandonGame):
         game_id=game.id,
         status_update={
             "message": f"{request.player_name} abandoned the game.",
-            "game_state": "finished",
+            "game_state": game.game_state,
             "player1_score": game.player1_score,
             "player2_score": game.player2_score,
         }
