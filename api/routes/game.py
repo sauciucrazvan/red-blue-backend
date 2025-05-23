@@ -216,7 +216,7 @@ async def join_game(request: JoinGame):
     if not game:
         raise HTTPException(status_code = 404, detail = "Game not found!")
  
-    if game.game_state == "finished":
+    if game.game_state == "finished" or game.game_state == "abandoned":
         raise HTTPException(status_code=403, detail="Game already finished!")
 
     if game.player1_name == request.player_name or game.player2_name == request.player_name:
@@ -619,7 +619,7 @@ async def disconnect_game(request: DisconnectGame):
     if not game:
         raise HTTPException(status_code = 404, detail = "Game not found!")
 
-    if game.game_state == "waiting" or game.game_state == "finished":
+    if game.game_state == "waiting" or game.game_state == "finished" or game.game_state == "abandoned":
         raise HTTPException(status_code = 403, detail = "The game is not active!")
     
     if request.player_name == game.player1_name and game.player1_disconnected_at:
