@@ -23,7 +23,7 @@ class Game(Base):
     current_round = Column(Integer, nullable=False)
     current_round_id = Column(String, nullable=True)
     game_state = Column(String, server_default="waiting", nullable=False)
-
+    public_lobby = Column(Integer, default=False, nullable=False)
     
     created_at = Column(DateTime, default=datetime.datetime.now(datetime.timezone.utc), nullable=False)
     finished_at = Column(DateTime, nullable=True)

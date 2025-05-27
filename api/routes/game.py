@@ -1,18 +1,20 @@
+ 
 import asyncio
 import datetime
 import re
- 
 from pydantic import BaseModel
-from core import config
+from misc.functions import generate_game_code
+from models.round_model import Round
 from ws.wsManager import notify_game_status
+from core import config
 from database import session as db
 from fastapi import HTTPException, Header
+from sqlalchemy.orm import joinedload
+from sqlalchemy import case
  
 from api.app import getApp
-from misc.functions import generate_game_code
  
 from models.game_model import Game
-from models.round_model import Round
  
 app = getApp()
  
@@ -33,9 +35,6 @@ async def list_games(
     
     if page < 1:
         raise HTTPException(status_code=400, detail="Page must be greater than 0.")
-
-    from sqlalchemy.orm import joinedload
-    from sqlalchemy import case
 
     session = db.getSession()
     dbGames = session.query(Game)
@@ -65,6 +64,7 @@ async def list_games(
                 "player2_disconnected_at": game.player2_disconnected_at,
                 "current_round": len(game.rounds),
                 "game_state": game.game_state,
+                "public_lobby": game.public_lobby,
                 "created_at": game.created_at,
                 "finished_at": game.finished_at,
                 "rounds": [
@@ -85,6 +85,30 @@ async def list_games(
     session.close()
     return result
  
+#
+#   Returns an array with all stored games that are in public lobby mode
+#
+
+@app.get("/api/v1/games/public")
+async def get_public_games():
+    session = db.getSession()
+    games = session.query(Game).options(joinedload(Game.rounds)).where(Game.public_lobby).order_by(
+        case((Game.game_state == "waiting", 0), else_=1),
+        Game.created_at.desc())
+
+    result = {
+        "games": [
+            {
+                "id": game.id,
+                "code": game.code,
+                "player1_name": game.player1_name
+            }
+        ] for game in games
+    }
+
+    session.close()
+    return result
+
 #
 #   Creates a game and returns the created game ID and the join code
 #   Requires a player name (3-16 characters)
@@ -147,10 +171,33 @@ async def start_lobby_expire_timer(game_id: int):
     session.close()
 
 #
+#   Modifies the public lobby status
+#
+@app.post("/api/v1/game/{game_id}/change_visibility")
+async def get_game(game_id: str, Authorization: str = Header(None)):
+    session = db.getSession()
+    game = session.query(Game).options(joinedload(Game.rounds)).filter(Game.id == game_id).first()
+ 
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found.")
+ 
+    token = Authorization.split(" ")[1] if Authorization else None
+ 
+    if token not in [game.player1_token, game.player2_token]:
+        raise HTTPException(status_code=403, detail="Invalid token.")
+ 
+    game.public_lobby = not game.public_lobby
+
+    session.commit()
+    session.refresh(game)
+ 
+    return {
+        "message": "Succesfully updated the game status"
+    }
+
+#
 #   Gets data for a specific game by their ID
 #
- 
-from sqlalchemy.orm import joinedload
  
 @app.get("/api/v1/game/{game_id}")
 async def get_game(game_id: str, Authorization: str = Header(None)):
