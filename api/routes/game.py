@@ -92,9 +92,7 @@ async def list_games(
 @app.get("/api/v1/games/public")
 async def get_public_games():
     session = db.getSession()
-    games = session.query(Game).options(joinedload(Game.rounds)).where(Game.public_lobby).order_by(
-        case((Game.game_state == "waiting", 0), else_=1),
-        Game.created_at.desc())
+    games = session.query(Game).options(joinedload(Game.rounds)).where(Game.public_lobby == True, Game.game_state == "waiting").order_by(Game.created_at.desc())
 
     result = {
         "games": [
