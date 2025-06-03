@@ -100,8 +100,8 @@ async def get_public_games():
                 "id": game.id,
                 "code": game.code,
                 "player1_name": game.player1_name
-            }
-        ] for game in games
+            } for game in games
+        ]
     }
 
     session.close()
