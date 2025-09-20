@@ -1,8 +1,6 @@
 # The RED & BLUE Game
 
-**RED & BLUE** is a real-time multiplayer competitive game application, where two players compete simultaneously. The goal is to provide a fast-paced, interactive, and balanced experience. Users connect, choose a color (red or blue), and the backend manages the game flow via Websockets.
-
-The mechanics involve move selections, scoring, an animated timer, and a notification system. The project was developed to strengthen teamwork, asynchronous programming, and modern UI design.
+**RED & BLUE** is a fast-paced head-to-head sabotaging game. Be the only one with a positive score to win.
 
 The game is publicly hosted at: https://redblue.razvansauciuc.dev/
 
